@@ -32,6 +32,14 @@ import type {
   PDFViewerOptions
 } from './typings';
 
+import {
+  IPageChangingEvent,
+  IPageRenderedEvent,
+  IPagesInitializedEvent,
+  IPagesLoadedEvent,
+  ITextLayerRenderedEvent
+} from '../events';
+
 if (!isSSR()) {
   assign(PDFJS, 'verbosity', PDFJS.VerbosityLevel.INFOS);
 }
@@ -99,9 +107,10 @@ export class PdfViewerComponent
   private destroy$ = new Subject<void>();
 
   @Output('after-load-complete') afterLoadComplete = new EventEmitter<PDFDocumentProxy>();
-  @Output('page-rendered') pageRendered = new EventEmitter<CustomEvent>();
-  @Output('pages-initialized') pageInitialized = new EventEmitter<CustomEvent>();
-  @Output('text-layer-rendered') textLayerRendered = new EventEmitter<CustomEvent>();
+  @Output('page-rendered') pageRendered = new EventEmitter<IPageRenderedEvent>();
+  @Output('pages-initialized') pageInitialized = new EventEmitter<IPagesInitializedEvent>();
+  @Output('text-layer-rendered') textLayerRendered = new EventEmitter<ITextLayerRenderedEvent>();
+  @Output('pages-loaded') pagesLoaded = new EventEmitter<IPagesLoadedEvent>();
   @Output('error') onError = new EventEmitter<any>();
   @Output('on-progress') onProgress = new EventEmitter<PDFProgressData>();
   @Output() pageChange: EventEmitter<number> = new EventEmitter<number>(true);
@@ -393,19 +402,25 @@ export class PdfViewerComponent
 
     const eventBus = createEventBus(PDFJSViewer, this.destroy$);
 
-    fromEvent<CustomEvent>(eventBus, 'pagerendered')
+    fromEvent<IPageRenderedEvent>(eventBus, 'pagerendered')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.pageRendered.emit(event);
       });
 
-    fromEvent<CustomEvent>(eventBus, 'pagesinit')
+    fromEvent<IPagesInitializedEvent>(eventBus, 'pagesinit')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.pageInitialized.emit(event);
       });
 
-    fromEvent(eventBus, 'pagechanging')
+    fromEvent<IPagesLoadedEvent>(eventBus, 'pagesloaded')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        this.pagesLoaded.emit(event);
+      });
+
+    fromEvent<IPageChangingEvent>(eventBus, 'pagechanging')
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ pageNumber }) => {
         if (this.pageScrollTimeout) {
@@ -418,7 +433,7 @@ export class PdfViewerComponent
         }, 100);
       });
 
-    fromEvent<CustomEvent>(eventBus, 'textlayerrendered')
+    fromEvent<ITextLayerRenderedEvent>(eventBus, 'textlayerrendered')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.textLayerRendered.emit(event);
@@ -456,7 +471,7 @@ export class PdfViewerComponent
 
     const eventBus = createEventBus(PDFJSViewer, this.destroy$);
 
-    fromEvent(eventBus, 'pagechanging')
+    fromEvent<IPageChangingEvent>(eventBus, 'pagechanging')
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ pageNumber }) => {
         if (pageNumber !== this._page) {
@@ -464,19 +479,25 @@ export class PdfViewerComponent
         }
       });
 
-    fromEvent<CustomEvent>(eventBus, 'pagerendered')
+    fromEvent<IPageRenderedEvent>(eventBus, 'pagerendered')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.pageRendered.emit(event);
       });
 
-    fromEvent<CustomEvent>(eventBus, 'pagesinit')
+    fromEvent<IPagesInitializedEvent>(eventBus, 'pagesinit')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.pageInitialized.emit(event);
       });
 
-    fromEvent<CustomEvent>(eventBus, 'textlayerrendered')
+    fromEvent<IPagesLoadedEvent>(eventBus, 'pagesloaded')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        this.pagesLoaded.emit(event);
+      });
+
+    fromEvent<ITextLayerRenderedEvent>(eventBus, 'textlayerrendered')
       .pipe(takeUntil(this.destroy$))
       .subscribe((event) => {
         this.textLayerRendered.emit(event);
@@ -500,7 +521,7 @@ export class PdfViewerComponent
         : RenderTextMode.DISABLED,
       findController: this.pdfSinglePageFindController,
       renderer: 'canvas',
-			l10n: undefined,
+      l10n: undefined,
     };
 
     this.pdfSinglePageViewer = new PDFJSViewer.PDFSinglePageViewer(pdfOptions);
@@ -583,7 +604,7 @@ export class PdfViewerComponent
 
           this.resetPdfDocument();
 
-          this.update();
+          // this.update();
         },
         error: (error) => {
           this.lastLoaded = null;
@@ -659,12 +680,20 @@ export class PdfViewerComponent
 
       this.pdfMultiPageViewer.setDocument(this._pdf);
       this.pdfMultiPageLinkService.setDocument(this._pdf, null);
+
+      this.pdfMultiPageViewer.firstPagePromise.then(() => {
+        this.update();
+      });
     } else {
       this.pdfMultiPageViewer.setDocument(null);
       this.pdfMultiPageLinkService.setDocument(null);
 
       this.pdfSinglePageViewer.setDocument(this._pdf);
       this.pdfSinglePageLinkService.setDocument(this._pdf, null);
+
+      this.pdfSinglePageViewer.firstPagePromise.then(() => {
+        this.update();
+      });
     }
   }
 
