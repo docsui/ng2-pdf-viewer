@@ -8,3 +8,22 @@ export interface PDFProgressData {
   loaded: number;
   total: number;
 }
+
+export enum FindStateEnum {
+  FOUND = 0,
+  NOT_FOUND = 1,
+  WRAPPED = 2,
+  PENDING = 3
+}
+
+export interface IFindResultMatchesCount {
+  current: number;
+  total: number;
+}
+
+export interface IFindResult {
+  state: FindStateEnum;
+  previous: any;
+  matchesCount: IFindResultMatchesCount;
+  rawQuery: string;
+}
